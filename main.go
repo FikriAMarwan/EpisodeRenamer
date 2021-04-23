@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/facette/natsort"
@@ -38,9 +39,15 @@ func NewEpisodeModel() *EpisodeModel {
 	return m
 }
 
+var (
+	EpOva int
+	Ep    int
+)
+
 func main() {
-	var anime, target *walk.TextEdit
+	var anime, target, episode, episodeova *walk.TextEdit
 	var tv *walk.TableView
+	// var selected []int
 	model := new(EpisodeModel)
 	mw := new(MyMainWindow)
 	MainWindow{
@@ -57,12 +64,14 @@ func main() {
 					}
 					walk.MsgBox(mw, "Episode Renamer", "Something Went Wrong", walk.MsgBoxIconWarning)
 					return
-				}
-				if len(files) == 0 {
+				} else if len(files) == 0 {
 					walk.MsgBox(mw, "Episode Renamer", "No Video Found", walk.MsgBoxIconWarning)
+				} else {
+					anime.SetText(folder[0])
+					model.Add(files)
+					episode.SetText("1")
+					episodeova.SetText("1")
 				}
-				anime.SetText(folder[0])
-				model.Add(files)
 			} else {
 				walk.MsgBox(mw, "Episode Renamer", "MAX Drop 1", walk.MsgBoxIconWarning)
 			}
@@ -106,16 +115,44 @@ func main() {
 					TextEdit{AssignTo: &target},
 				},
 			},
+			HSplitter{
+				MaxSize: Size{500, 20},
+				Row:     3,
+				Children: []Widget{
+					Label{Text: "Episode Awal : "},
+					TextEdit{
+						AssignTo:  &episode,
+						MaxLength: 4,
+						OnTextChanged: func() {
+							if n, err := strconv.Atoi(episode.Text()); err == nil {
+								Ep = n
+								model.Refresh()
+							}
+						},
+					},
+					Label{Text: "Episode OVA Awal : "},
+					TextEdit{
+						AssignTo:  &episodeova,
+						MaxLength: 4,
+						OnTextChanged: func() {
+							if n, err := strconv.Atoi(episodeova.Text()); err == nil {
+								EpOva = n
+								model.Refresh()
+							}
+						},
+					},
+				},
+			},
 			TableView{
 				AssignTo:                 &tv,
-				Row:                      3,
+				Row:                      4,
 				MinSize:                  Size{500, 500},
 				Model:                    model,
 				AlternatingRowBG:         true,
 				CheckBoxes:               true,
 				AlwaysConsumeSpace:       true,
 				NotSortableByHeaderClick: true,
-				// MultiSelection: true,
+				MultiSelection:           true,
 				Columns: []TableViewColumn{
 					{Name: "Index", Width: 60, Hidden: true},
 					{Name: "Episode", Width: 60},
@@ -124,6 +161,7 @@ func main() {
 				},
 				OnKeyPress: func(key walk.Key) {
 					i := tv.SelectedIndexes()
+					// selected = i
 					if key == walk.KeyDelete || key == walk.KeyBack {
 						for _, v := range i {
 							model.Delete(v)
@@ -135,21 +173,26 @@ func main() {
 						for _, v := range i {
 							model.Move(v, "UP")
 						}
-						tv.SetSelectedIndexes(i)
 					}
 					if key == walk.KeyDown && len(i) < len(model.items) {
 						sort.Sort(sort.Reverse(sort.IntSlice(i)))
 						for _, v := range i {
 							model.Move(v, "DOWN")
 						}
-						tv.SetSelectedIndexes(i)
 					}
+					// if key == walk.KeyLeft {
+					// 	fmt.Println(i)
+					// 	fmt.Println(selected)
+					// 	tv.SetSelectedIndexes([]int{0, 2, 4, 6, 8})
+					// }
 					tv.SetSelectedIndexes(i)
+				},
+				OnKeyUp: func(key walk.Key) {
 				},
 			},
 			PushButton{
 				Text: "RENAME IT",
-				Row:  4,
+				Row:  5,
 				OnClicked: func() {
 					if anime.Text() == "No Folder Selected" || anime.Text() == "Select Folder" {
 						walk.MsgBox(mw, "Episode Renamer", "Select The Folder", walk.MsgBoxIconWarning)
@@ -191,17 +234,17 @@ func (m *EpisodeModel) SetChecked(row int, checked bool) error {
 }
 
 func (m *EpisodeModel) Refresh() {
-	EpOva := 1
-	Ep := 1
+	ep := Ep
+	ova := EpOva
 	for _, v := range m.items {
 		if v.OVABool {
-			v.Index = EpOva
-			v.Episode = fmt.Sprintf("OVA %d", EpOva)
-			EpOva++
+			v.Index = ova
+			v.Episode = fmt.Sprintf("OVA %d", ova)
+			ova++
 		} else {
-			v.Index = len(m.items) + Ep
-			v.Episode = fmt.Sprintf("%d", Ep)
-			Ep++
+			v.Index = len(m.items) + ep
+			v.Episode = fmt.Sprintf("%d", ep)
+			ep++
 		}
 	}
 	m.PublishRowsChanged(0, len(m.items))
@@ -243,6 +286,8 @@ func (m *EpisodeModel) Move(i int, way string) {
 }
 
 func FindAnime(path string) (files []string, err error) {
+	Ep = 1
+	EpOva = 1
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
